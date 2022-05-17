@@ -2,11 +2,12 @@ namespace DSChk
 {
     public partial class Form1 : Form
     {
-
+        HashSet<string> hashlist;
 
         public Form1()
         {
             InitializeComponent();
+            hashlist = new HashSet<string>();
         }
 
         private void textBox1_DragDrop(object sender, DragEventArgs e)
@@ -54,10 +55,20 @@ namespace DSChk
             treeView1.Nodes.Clear();
             var node = treeView1.Nodes.Add(textBox1.Text);
             var dirList = new DirectoryInfo(textBox1.Text);
+            long size = 0;
 
-            long size = SetNode(node, dirList, false);
+            //サブフォルダのサイズを合計していく
+            foreach (DirectoryInfo di in dirList.GetDirectories())
+            {
+                var subNode = node?.Nodes.Add(di.Name);
+                long ssize = 0;
+                ssize = SetNode(subNode, di, false);
+                if (subNode is not null)
+                    subNode.Text += " (" + (ssize / 1024).ToString("#,0") + "KB)";
+                size += ssize;
+            }
+
             node.Text += " (" + (size / 1024).ToString("#,0") + "KB)";
-
 
         }
 
@@ -72,27 +83,35 @@ namespace DSChk
             //サブフォルダのサイズを合計していく
             foreach (DirectoryInfo di in dirInfo.GetDirectories())
             {
-                var subNode = node?.Nodes.Add(di.Name);
                 long ssize = 0;
+                var subNode = node?.Nodes.Add(di.Name);
                 if (recursion)
+                {
                     ssize = SetNode(subNode, di, recursion);
+                    if (subNode is not null)
+                        subNode.Text += " (" + (ssize / 1024).ToString("#,0") + "KB)";
+                }
                 else
+                {
                     ssize = SetNode(null, di, recursion);
-
-                if (subNode is not null)
-                    subNode.Text += " (" + (ssize / 1024).ToString("#,0") + "KB)";
+                }
                 csize += ssize;
             }
-
             return csize;
         }
 
         private void button2_Click(object sender, EventArgs e)
         {
-        
+            DateTime dt = DateTime.Now;
+            string fileName = "Output" + dt.ToString("yyyyMMdd") + ".csv";
+            using (StreamWriter sw = new StreamWriter(fileName, false, System.Text.Encoding.UTF8))
+            {
+                DirectoryInfo dirList = new DirectoryInfo(textBox1.Text);
+                OutputDirectorySize(sw, dirList, 0);
+            }
         }
 
-        public static long GetDirectorySize(DirectoryInfo dirInfo)
+        public static long OutputDirectorySize( StreamWriter sw, DirectoryInfo dirInfo, int count)
         {
             long size = 0;
 
@@ -102,9 +121,11 @@ namespace DSChk
 
             //サブフォルダのサイズを合計していく
             foreach (DirectoryInfo di in dirInfo.GetDirectories())
-                size += GetDirectorySize(di);
+                size += OutputDirectorySize( sw, di, count++);
 
             //結果を返す
+            sw.WriteLine(String.Format("{0},{1}", dirInfo.FullName, " (" + (size / 1024).ToString("#,0") + "KB)"));
+
             return size;
         }
 
@@ -114,18 +135,32 @@ namespace DSChk
             {
                 TreeNode? node = e.Node;
                 String? path = node?.FullPath;
-                node?.Nodes.Clear();
 
                 if (path == null) return;
-                path = System.Text.RegularExpressions.Regex.Replace(path, " \\([0-9,]*KB\\)$", "");
-
+                path = System.Text.RegularExpressions.Regex.Replace(path, " \\([0-9,]*KB\\)", "");
+                if(hashlist.Contains(path))
+                    return;
+                
+                node?.Nodes.Clear();
 
                 DirectoryInfo dirList = new DirectoryInfo(path);
-                long size = SetNode(node, dirList, false);
+
+                //サブフォルダのサイズを合計していく
+                foreach (DirectoryInfo di in dirList.GetDirectories())
+                {
+                    var subNode = node?.Nodes.Add(di.Name);
+                    long ssize = 0;
+                    ssize = SetNode(subNode, di, false);
+                    if (subNode is not null)
+                        subNode.Text += " (" + (ssize / 1024).ToString("#,0") + "KB)";
+                }
+
+                hashlist.Add(path);
 
             }
             catch (IOException ie)
             {
+
             }
 
         }
